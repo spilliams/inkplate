@@ -1,6 +1,8 @@
 package inkplate
 
 import (
+	"errors"
+	"fmt"
 	"log"
 
 	"github.com/albenik/go-serial/v2"
@@ -25,10 +27,99 @@ type Inkplate struct {
 	port *serial.Port
 }
 
-func (ip *Inkplate) IsOK() bool {
-	// #?*
-	// should return OK
+/////////////////////////
+// Basic functionality //
+/////////////////////////
+
+func (ip *Inkplate) tx(s string) error {
+	b := []byte(s)
+	b = append(b, '\n')
+	b = append(b, '\r')
+	i, err := ip.port.Write(b)
+	if err != nil {
+		return err
+	}
+	if i == 0 {
+		return errors.New("No bytes written")
+	}
+	return nil
+}
+
+func (ip *Inkplate) rx() (string, error) {
+	buff := make([]byte, 100)
+	total := 0
+	for {
+		n, err := ip.port.Read(buff)
+		if err != nil {
+			return "", err
+		}
+		total += n
+		if n == 0 {
+			// end of file
+			break
+		}
+	}
+	return string(buff[:total]), nil
+}
+
+//////////////////////
+// Device Lifecycle //
+//////////////////////
+
+func (ip *Inkplate) Close() error {
+	return ip.port.Close()
+}
+
+func (ip *Inkplate) IsOK() (bool, error) {
+	err := ip.tx("#?*")
+	if err != nil {
+		return false, err
+	}
+	response, err := ip.rx()
+	if err != nil {
+		return false, err
+	}
+	if response != "OK" {
+		return false, fmt.Errorf("Response was '%s' instead of 'OK'", response)
+	}
+	return true, nil
+}
+
+func (ip *Inkplate) IsPanelOn() bool {
+	// #R(?)*
 	return false
+}
+
+func (ip *Inkplate) SetPanelSupply(on bool) {
+	// #Q(S)*
+}
+
+/////////////
+// Drawing //
+/////////////
+
+func (ip *Inkplate) Print(s string) {
+	// #C("STRING")*
+}
+
+func (ip *Inkplate) Clear() {
+	// #K(1)*
+}
+
+func (ip *Inkplate) Display() {
+	// #L(1)*
+}
+
+func (ip *Inkplate) DrawBitmap(x, y int, path string) {
+	// #H(XXX,YYY,"PATH")*
+}
+
+func (ip *Inkplate) PartialUpdate(y1, x2, y2 int) {
+	// #M(YY1, XX2, YY2)*
+}
+
+func (ip *Inkplate) DrawImage(x, y int, path string) {
+	// #S(XXX,YYY,"PATH")*
 }
 
 func (ip *Inkplate) DrawPixel(x, y, c int) {
@@ -78,9 +169,21 @@ func (ip *Inkplate) FillRoundedRect(x, y, w, h, r, c int) {
 	// #B(XXX,YYY,WWW,HHH,RRR,CC)*
 }
 
-func (ip *Inkplate) Print(s string) {
-	// #C("STRING")*
+func (ip *Inkplate) DrawThickLine(x, y, i, j, t, c int) {
+	// #T(XXX,YYY,III,JJJ,TT,CC)*
 }
+
+func (ip *Inkplate) DrawEllipse(x, y, rx, ry, c int) {
+	// #U(XXX,YYY,RRX,RRY,CC)*
+}
+
+func (ip *Inkplate) FillEllipse(x, y, rx, ry, c int) {
+	// #V(XXX,YYY,RRX,RRY,CC)*
+}
+
+////////////////////
+// Other Controls //
+////////////////////
 
 func (ip *Inkplate) SetTextSize(n int) {
 	// #D(NN)*
@@ -107,10 +210,6 @@ func (ip *Inkplate) SetRotation(r InkplateRotation) {
 	// #G(RRR)*
 }
 
-func (ip *Inkplate) DrawBitmap(x, y int, path string) {
-	// #H(XXX,YYY,"PATH")*
-}
-
 type InkplateDisplayMode int
 
 const (
@@ -118,25 +217,13 @@ const (
 	InkplateDisplayMode1Bit
 )
 
-func (ip *Inkplate) SetDispalyMode(m InkplateDisplayMode) {
+func (ip *Inkplate) SetDisplayMode(m InkplateDisplayMode) {
 	// #I(D)*
 }
 
 func (ip *Inkplate) GetDisplayMode() InkplateDisplayMode {
 	// #J(?)*
 	return InkplateDisplayMode3Bit
-}
-
-func (ip *Inkplate) Clear() {
-	// #K(1)*
-}
-
-func (ip *Inkplate) Display() {
-	// #L(1)*
-}
-
-func (ip *Inkplate) PartialUpdate(y1, x2, y2 int) {
-	// #M(YY1, XX2, YY2)*
 }
 
 func (ip *Inkplate) ReadTempCelcius() int {
@@ -160,46 +247,4 @@ func (ip *Inkplate) TouchpadHigh(t InkplateTouchpad) bool {
 func (ip *Inkplate) ReadBatteryVoltage() float32 {
 	// #P(?)*
 	return 0
-}
-
-func (ip *Inkplate) SetPanelSupply(on bool) {
-	// #Q(S)*
-}
-
-func (ip *Inkplate) IsPanelOn() bool {
-	// #R(?)*
-	return false
-}
-
-func (ip *Inkplate) DrawImage(x, y int, path string) {
-	// #S(XXX,YYY,"PATH")*
-}
-
-func (ip *Inkplate) DrawThickLine(x, y, i, j, t, c int) {
-	// #T(XXX,YYY,III,JJJ,TT,CC)*
-}
-
-func (ip *Inkplate) DrawEllipse(x, y, rx, ry, c int) {
-	// #U(XXX,YYY,RRX,RRY,CC)*
-}
-
-func (ip *Inkplate) FillEllipse(x, y, rx, ry, c int) {
-	// #V(XXX,YYY,RRX,RRY,CC)*
-}
-
-func (ip *Inkplate) tx(b []byte) {
-	b = append(b, '\n')
-	b = append(b, '\r')
-	i, err := ip.port.Write(b)
-	if err != nil {
-		// ?
-	}
-	if i == 0 {
-		// ?
-	}
-}
-
-func (ip *Inkplate) rx() {
-	// make a buffer!
-	// ip.port.Read(b)
 }

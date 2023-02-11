@@ -8,11 +8,20 @@ import (
 )
 
 func main() {
-	i, e := inkplate.New("/dev/ttyUSB0")
-	if e != nil {
-		fmt.Println(e)
+	i, err := inkplate.New("/dev/ttyUSB0")
+	defer i.Close()
+	if err != nil {
+		fmt.Println(err)
 		os.Exit(1)
 	}
-	i.Clear()
-	i.Print("Hello, world")
+
+	ok, err := i.IsOK()
+	if err != nil {
+		fmt.Println(err)
+	}
+	if ok {
+		fmt.Println("Is OK")
+	} else {
+		fmt.Println("Is NOT OK")
+	}
 }
